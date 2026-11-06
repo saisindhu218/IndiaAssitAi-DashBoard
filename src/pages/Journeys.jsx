@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { getAllJourneys, saveJourney, deleteJourney } from "../lib/data";
+import { getAllJourneys, getAllServices, saveJourney, deleteJourney } from "../lib/data";
+import { validateJourney, isValidId } from "../lib/validate";
 
-const EMPTY = { id: "", title: "", icon: "🧭", description: "", stepsText: "" };
+const EMPTY = { id: "", title: "", icon: "🧭", description: "", stepsText: "", isNew: true };
 
 // Steps are edited as one line per step: "serviceId | optional note"
 function journeyToForm(j) {
   return {
+    isNew: false,
     id: j.id,
     title: j.title || "",
     icon: j.icon || "🧭",
@@ -29,25 +31,39 @@ export default function Journeys() {
   const [journeys, setJourneys] = useState(null);
   const [editing, setEditing] = useState(null); // form state or null
   const [error, setError] = useState("");
+  const [serviceIds, setServiceIds] = useState([]);
 
   function load() {
     getAllJourneys().then(setJourneys);
   }
   useEffect(load, []);
+  useEffect(() => {
+    getAllServices().then((list) => setServiceIds(list.map((s) => s.id).sort()));
+  }, []);
 
   async function handleSave() {
     setError("");
-    if (!editing.id.trim()) {
-      setError("Journey needs an ID.");
+    if (!isValidId(editing.id)) {
+      setError("Journey ID must use lowercase letters, numbers and single hyphens, e.g. 'buying-a-home'.");
+      return;
+    }
+    if (editing.isNew && journeys.some((j) => j.id === editing.id)) {
+      setError("A journey with this ID already exists. Choose a different ID, or edit the existing one.");
+      return;
+    }
+    const payload = {
+      title: editing.title.trim(),
+      icon: editing.icon,
+      description: editing.description,
+      steps: parseSteps(editing.stepsText),
+    };
+    const { errors } = validateJourney(payload, serviceIds);
+    if (errors.length) {
+      setError(errors.join(" "));
       return;
     }
     try {
-      await saveJourney(editing.id, {
-        title: editing.title,
-        icon: editing.icon,
-        description: editing.description,
-        steps: parseSteps(editing.stepsText),
-      });
+      await saveJourney(editing.id, payload);
       setEditing(null);
       load();
     } catch (e) {
@@ -61,18 +77,19 @@ export default function Journeys() {
     load();
   }
 
-  if (!journeys) return <div className="container">Loading...</div>;
+  if (!journeys) return <div className="page">Loading...</div>;
 
   return (
-    <div className="container">
-      <div className="filter-row">
-        <h2 style={{ margin: 0 }}>Journeys</h2>
+    <div className="page">
+      <div className="eyebrow">Life Events</div>
+      <h1 className="page-title" style={{ marginBottom: 24 }}>Journeys</h1>
+      <div className="toolbar" style={{ borderBottom: "none", paddingBottom: 0, marginBottom: 20 }}>
         <button
           className="btn"
           style={{ marginLeft: "auto" }}
           onClick={() => setEditing({ ...EMPTY })}
         >
-          + Add Journey
+          + New Journey
         </button>
       </div>
 
@@ -82,7 +99,7 @@ export default function Journeys() {
           <input
             type="text"
             value={editing.id}
-            disabled={!!journeys.find((j) => j.id === editing.id) && editing.id !== ""}
+            disabled={!editing.isNew}
             onChange={(e) => setEditing({ ...editing, id: e.target.value.trim().toLowerCase().replace(/\s+/g, "-") })}
             style={{ width: "100%" }}
           />
@@ -106,6 +123,10 @@ export default function Journeys() {
             style={{ fontFamily: "monospace" }}
             placeholder="pan-card-correction | Make sure your PAN is up to date"
           />
+          <div className="hint" style={{ marginTop: 6 }}>
+            Each step's service id must match an existing service id exactly
+            ({serviceIds.length} available -- find ids on the Service Registry page).
+          </div>
           {error && <div className="error">{error}</div>}
           <div className="form-actions">
             <button className="btn" onClick={handleSave}>Save</button>
@@ -114,30 +135,32 @@ export default function Journeys() {
         </div>
       )}
 
-      <table>
-        <thead>
-          <tr>
-            <th>Journey</th>
-            <th>Steps</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {journeys.map((j) => (
-            <tr key={j.id}>
-              <td>{j.icon} {j.title}</td>
-              <td>{(j.steps || []).length}</td>
-              <td style={{ display: "flex", gap: 8 }}>
-                <button className="btn secondary" onClick={() => setEditing(journeyToForm(j))}>Edit</button>
-                <button className="btn danger" onClick={() => handleDelete(j.id)}>Delete</button>
-              </td>
+      <div className="register">
+        <table>
+          <thead>
+            <tr>
+              <th>Journey</th>
+              <th>Steps</th>
+              <th></th>
             </tr>
-          ))}
-          {journeys.length === 0 && (
-            <tr><td colSpan={3} style={{ color: "#888", padding: 20 }}>No journeys yet.</td></tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {journeys.map((j) => (
+              <tr key={j.id}>
+                <td className="entry-name">{j.icon} {j.title}</td>
+                <td className="tag-mono">{(j.steps || []).length}</td>
+                <td style={{ display: "flex", gap: 8 }}>
+                  <button className="btn secondary" onClick={() => setEditing(journeyToForm(j))}>Edit</button>
+                  <button className="btn danger" onClick={() => handleDelete(j.id)}>Delete</button>
+                </td>
+              </tr>
+            ))}
+            {journeys.length === 0 && (
+              <tr className="empty-row"><td colSpan={3}>No journeys yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
