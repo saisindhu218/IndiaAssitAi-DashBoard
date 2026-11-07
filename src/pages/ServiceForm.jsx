@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   getService,
   saveService,
@@ -53,6 +53,8 @@ export default function ServiceForm() {
   const { id } = useParams();
   const isNew = id === "new";
   const navigate = useNavigate();
+  const location = useLocation();
+  const draftInfo = isNew ? location.state : null; // set when coming from "Draft with AI"
 
   const [docId, setDocId] = useState(isNew ? "" : id);
   const [form, setForm] = useState(EMPTY);
@@ -62,6 +64,19 @@ export default function ServiceForm() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState([]);
+  const [verified, setVerified] = useState(false);
+
+  // Pre-fill the form from an AI draft.
+  useEffect(() => {
+    const d = draftInfo?.draft;
+    if (!isNew || !d) return;
+    setDocId(d.id || "");
+    setForm(serviceToFormState(d));
+    const feeRows = Object.entries(d.fees || {}).map(([label, value]) => ({ label, value: String(value) }));
+    setFees(feeRows.length ? feeRows : [{ label: "", value: "" }]);
+    setFaqs((d.faqs || []).map((x) => ({ q: x.q || "", a: x.a || "" })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isNew) return;
@@ -83,6 +98,11 @@ export default function ServiceForm() {
 
   async function handleSave() {
     setErrors([]);
+
+    if (draftInfo?.draft && !verified) {
+      setErrors(["Please tick the box at the top to confirm you checked this AI draft against the official sources."]);
+      return;
+    }
 
     let stateOverrides;
     try {
@@ -174,6 +194,41 @@ export default function ServiceForm() {
     <div className="page">
       <div className="eyebrow">{isNew ? "New Entry" : `Entry / ${docId}`}</div>
       <h1 className="page-title" style={{ fontSize: 22, marginBottom: 24 }}>{isNew ? "Register a Service" : form.name || docId}</h1>
+      {draftInfo?.draft && (
+        <div className="card" style={{ borderColor: "var(--brand-1)", marginBottom: 16 }}>
+          <h2 style={{ fontSize: 16 }}>AI draft -- verify before publishing</h2>
+          <p className="hint" style={{ marginTop: 4 }}>
+            Written by AI from the pages below. AI can misread a page, so check every fee, deadline and document
+            against the official site before saving.
+          </p>
+          <div style={{ fontSize: 13, margin: "8px 0" }}>
+            <strong>Sources used:</strong>
+            <ul style={{ margin: "4px 0 8px 18px", padding: 0 }}>
+              {(draftInfo.sources || []).map((s, i) => (
+                <li key={i}>{s.url.startsWith("http") ? <a href={s.url} target="_blank" rel="noreferrer">{s.title || s.url}</a> : s.url}</li>
+              ))}
+            </ul>
+            {draftInfo.missing?.length > 0 && (
+              <p style={{ margin: "6px 0" }}>
+                <strong>Not found in the sources (left empty):</strong> {draftInfo.missing.join(", ")}
+              </p>
+            )}
+            {draftInfo.notes?.length > 0 && (
+              <>
+                <strong>Where key facts came from:</strong>
+                <ul style={{ margin: "4px 0 8px 18px", padding: 0 }}>
+                  {draftInfo.notes.map((n, i) => <li key={i}>{n}</li>)}
+                </ul>
+              </>
+            )}
+          </div>
+          <label style={{ display: "flex", gap: 8, alignItems: "center", textTransform: "none", letterSpacing: "normal", fontFamily: "inherit" }}>
+            <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} />
+            I checked this draft against the official sources
+          </label>
+        </div>
+      )}
+
       <div className="card">
         <label>Service ID (lowercase, hyphens only, e.g. "pan-card-correction")</label>
         <input

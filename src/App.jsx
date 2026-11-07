@@ -9,12 +9,18 @@ import Dashboard from "./pages/Dashboard";
 import ServiceForm from "./pages/ServiceForm";
 import Journeys from "./pages/Journeys";
 import Reports from "./pages/Reports";
+import Draft from "./pages/Draft";
+import Requests from "./pages/Requests";
+import Changes from "./pages/Changes";
 
 function Sidebar({ email }) {
   const location = useLocation();
   const isServices = location.pathname === "/" || location.pathname.startsWith("/services");
   const isJourneys = location.pathname.startsWith("/journeys");
   const isReports = location.pathname.startsWith("/reports");
+  const isRequests = location.pathname.startsWith("/requests");
+  const isChanges = location.pathname.startsWith("/changes");
+  const isDraft = location.pathname.startsWith("/draft");
 
   return (
     <div className="sidebar">
@@ -29,6 +35,9 @@ function Sidebar({ email }) {
       <div className="nav-group">
         <Link to="/" className={`nav-link ${isServices ? "active" : ""}`}>Service Registry</Link>
         <Link to="/journeys" className={`nav-link ${isJourneys ? "active" : ""}`}>Journeys</Link>
+        <Link to="/requests" className={`nav-link ${isRequests ? "active" : ""}`}>Requests</Link>
+        <Link to="/draft" className={`nav-link ${isDraft ? "active" : ""}`}>Draft with AI</Link>
+        <Link to="/changes" className={`nav-link ${isChanges ? "active" : ""}`}>Changes</Link>
         <Link to="/reports" className={`nav-link ${isReports ? "active" : ""}`}>Reports</Link>
       </div>
 
@@ -73,6 +82,9 @@ export default function App() {
           <Route path="/services/:id" element={<ServiceForm />} />
           <Route path="/journeys" element={<Journeys />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/requests" element={<Requests />} />
+          <Route path="/draft" element={<Draft />} />
+          <Route path="/changes" element={<Changes />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Gate>

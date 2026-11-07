@@ -39,6 +39,23 @@ export const KNOWN_SERVICE_FIELDS = [
   "lastUpdated",
 ];
 
+/**
+ * Tells the mobile app "the catalog changed". Phones read this one small
+ * document on start-up and download the catalog again only when the number
+ * differs. Every publish below calls it, so edits reach phones quickly.
+ */
+export async function bumpCatalogVersion() {
+  const now = Date.now();
+  try {
+    await setDoc(doc(db, "meta", "catalog"), { version: now, updatedAt: now });
+  } catch (e) {
+    throw new Error(
+      "Saved, but couldn't update the catalog version, so phones may not see this change yet. " +
+        "Publish the latest firestore.rules (it adds the 'meta' rule). Details: " + e.message
+    );
+  }
+}
+
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -70,17 +87,20 @@ export async function saveService(id, data) {
   if (!id || !id.trim()) throw new Error("Service needs an id (used as its URL-safe key).");
   const { id: _drop, ...fields } = data; // id is the doc key, not a field
   await setDoc(doc(db, "services", id.trim()), fields, { merge: false });
+  await bumpCatalogVersion();
 }
 
 /** Marks a service as checked today without changing its content. */
 export async function markServiceVerified(id) {
   const date = todayISO();
   await updateDoc(doc(db, "services", id), { lastUpdated: date });
+  await bumpCatalogVersion();
   return date;
 }
 
 export async function deleteService(id) {
   await deleteDoc(doc(db, "services", id));
+  await bumpCatalogVersion();
 }
 
 /**
@@ -110,10 +130,12 @@ export async function saveJourney(id, data) {
   if (!id || !id.trim()) throw new Error("Journey needs an id.");
   const { id: _drop, ...fields } = data;
   await setDoc(doc(db, "journeys", id.trim()), fields, { merge: false });
+  await bumpCatalogVersion();
 }
 
 export async function deleteJourney(id) {
   await deleteDoc(doc(db, "journeys", id));
+  await bumpCatalogVersion();
 }
 
 // ---- Reports (sent by app users) ----
@@ -129,4 +151,15 @@ export async function setReportResolved(id, resolved) {
 
 export async function deleteReport(id) {
   await deleteDoc(doc(db, "reports", id));
+}
+
+// ---- Service requests (sent by app users who couldn't find a service) ----
+
+export async function getRequests() {
+  const snap = await getDocs(query(collection(db, "requests"), orderBy("createdAt", "desc"), limit(500)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function deleteRequests(ids) {
+  await Promise.all(ids.map((id) => deleteDoc(doc(db, "requests", id))));
 }
